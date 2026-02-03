@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金行99 土味特效</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        /* 3D旋转文字容器 */
+        .text-container {
+            perspective: 1000px;
+            cursor: pointer;
+        }
+        .gold-text {
+            font-size: 80px;
+            font-weight: bold;
+            color: #ffd700;
+            text-shadow: 0 0 10px #ffd700, 0 0 20px #ffd700, 0 0 30px #ffd700;
+            transform-style: preserve-3d;
+            animation: rotate3d 8s linear infinite;
+        }
+        /* 3D旋转动画 */
+        @keyframes rotate3d {
+            0% {
+                transform: rotateY(0deg) rotateX(0deg);
+            }
+            50% {
+                transform: rotateY(180deg) rotateX(10deg);
+            }
+            100% {
+                transform: rotateY(360deg) rotateX(0deg);
+            }
+        }
+        /* 爱心样式 */
+        .heart {
+            position: absolute;
+            color: #ff0000;
+            font-size: 20px;
+            opacity: 0;
+            animation: heartPop 1.5s forwards;
+        }
+        /* 爱心蹦出动画 */
+        @keyframes heartPop {
+            0% {
+                transform: scale(0) translate(0, 0);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.5) translate(var(--x), var(--y));
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(0.5) translate(var(--x2), var(--y2));
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="text-container" id="textContainer">
+        <div class="gold-text">金行99</div>
+    </div>
+
+    <script>
+        const container = document.getElementById('textContainer');
+        const body = document.body;
+
+        // 生成随机爱心
+        function createHeart(x, y) {
+            const heart = document.createElement('div');
+            heart.classList.add('heart');
+            heart.textContent = '❤️';
+            // 随机位置偏移和动画参数
+            const randomX = (Math.random() - 0.5) * 300;
+            const randomY = (Math.random() - 0.5) * 300;
+            const randomX2 = (Math.random() - 0.5) * 400;
+            const randomY2 = (Math.random() - 0.5) * 400;
+            // 设置自定义属性控制动画位移
+            heart.style.setProperty('--x', `${randomX}px`);
+            heart.style.setProperty('--y', `${randomY}px`);
+            heart.style.setProperty('--x2', `${randomX2}px`);
+            heart.style.setProperty('--y2', `${randomY2}px`);
+            // 爱心初始位置
+            heart.style.left = `${x}px`;
+            heart.style.top = `${y}px`;
+            // 随机大小
+            heart.style.fontSize = `${Math.random() * 20 + 15}px`;
+            body.appendChild(heart);
+            // 动画结束后移除爱心，避免DOM堆积
+            setTimeout(() => {
+                heart.remove();
+            }, 1500);
+        }
+
+        // 点击页面生成爱心
+        body.addEventListener('click', (e) => {
+            createHeart(e.clientX, e.clientY);
+        });
+
+        // 自动生成爱心（每1秒生成一个）
+        setInterval(() => {
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            createHeart(centerX, centerY);
+        }, 1000);
+    </script>
+</body>
+</html>
