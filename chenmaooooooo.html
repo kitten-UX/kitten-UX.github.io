@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>鸡公煲制作 3D 粒子特效（GIF 导出版）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #ffccd5, #f7c8e0, #d4b5ff);
+            background-size: 400% 400%;
+            animation: bgFlow 15s ease infinite;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: background 1.5s ease;
+        }
+
+        @keyframes bgFlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 输入框按钮组 - 新增导出按钮 */
+        .input-group {
+            position: absolute;
+            top: 80px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 10;
+            width: 70%;
+            max-width: 600px;
+        }
+
+        #textInput {
+            flex: 1;
+            height: 55px;
+            padding: 0 20px;
+            border: none;
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            color: #d63384;
+            font-size: 18px;
+            outline: none;
+            box-shadow: 0 4px 15px rgba(214, 51, 132, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        #textInput::placeholder {
+            color: rgba(214, 51, 132, 0.5);
+        }
+
+        #textInput:focus {
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 0 0 2px rgba(214, 51, 132, 0.3);
+        }
+
+        .btn {
+            height: 55px;
+            padding: 0 25px;
+            border: none;
+            border-radius: 28px;
+            color: #ffffff;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #generateBtn {
+            background: linear-gradient(90deg, #d63384, #ff69b4);
+            box-shadow: 0 4px 15px rgba(214, 51, 132, 0.2);
+        }
+
+        #exportBtn {
+            background: linear-gradient(90deg, #ff8fab, #ff69b4);
+            box-shadow: 0 4px 15px rgba(255, 138, 171, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(214, 51, 132, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* 3D舞台 - 透视效果 */
+        .stage {
+            perspective: 1200px;
+            position: relative;
+            margin-top: 50px;
+        }
+
+        .text-rotate {
+            font-size: 100px;
+            font-weight: 900;
+            color: #d63384;
+            text-shadow: 0 0 10px rgba(214, 51, 132, 0.3), 0 0 20px rgba(214, 51, 132, 0.1);
+            transform-style: preserve-3d;
+            animation: text3DRotate 8s linear infinite;
+            position: relative;
+            z-index: 2;
+            white-space: nowrap;
+        }
+
+        @keyframes text3DRotate {
+            0% { transform: rotateY(0deg) rotateX(0deg); }
+            50% { transform: rotateY(180deg) rotateX(5deg); }
+            100% { transform: rotateY(360deg) rotateX(0deg); }
+        }
+
+        .particle-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .heart-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: #ff69b4;
+            transform: rotate(45deg);
+            box-shadow: 0 0 8px #ff69b4;
+            opacity: 0.9;
+            border-radius: 2px;
+            animation: particleJump 2s ease-in-out infinite, particleRotate 3s linear infinite;
+        }
+
+        .heart-particle::before,
+        .heart-particle::after {
+            content: "";
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: #ff69b4;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #ff69b4;
+        }
+
+        .heart-particle::before { top: -4px; left: 0; }
+        .heart-particle::after { top: 0; left: -4px; }
+
+        .heart-particle.tiny {
+            width: 5px;
+            height: 5px;
+            animation-duration: 1.5s, 2.5s;
+        }
+        .heart-particle.tiny::before,
+        .heart-particle.tiny::after {
+            width: 5px;
+            height: 5px;
+        }
+        .heart-particle.tiny::before { top: -2.5px; }
+        .heart-particle.tiny::after { left: -2.5px; }
+
+        @keyframes particleJump {
+            0%, 100% { transform: rotate(45deg) translateY(0px) scale(1); }
+            50% { transform: rotate(45deg) translateY(-15px) scale(1.3); opacity: 1; }
+        }
+
+        @keyframes particleRotate {
+            0% { transform: rotate(45deg) rotateZ(0deg); }
+            100% { transform: rotate(45deg) rotateZ(360deg); }
+        }
+
+        .heart-particle.reverse {
+            animation: particleJump 2s ease-in-out infinite, particleRotate 3s linear infinite reverse;
+        }
+
+        .tip-text {
+            position: absolute;
+            bottom: 50px;
+            color: #d63384;
+            opacity: 0.7;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        /* GIF导出加载提示 */
+        .loading-tip {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #d63384;
+            border-radius: 12px;
+            font-size: 18px;
+            z-index: 999;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body id="appBody">
+    <div class="input-group">
+        <input type="text" id="textInput" placeholder="请输入文字（如：鸡公煲制作）" maxlength="8" value="鸡公煲制作">
+        <button id="generateBtn" class="btn">生成特效 ❤️</button>
+        <button id="exportBtn" class="btn">导出 GIF 🎞️</button>
+    </div>
+
+    <div class="stage" id="captureStage">
+        <div class="text-rotate" id="displayText">鸡公煲制作</div>
+        <div class="particle-container" id="particleContainer"></div>
+    </div>
+
+    <div class="tip-text">鸡公煲制作 | 粒子紧贴文字跳跃旋转 | 支持导出1:1 GIF</div>
+    <div class="loading-tip" id="loadingTip">正在生成GIF，请稍候...</div>
+
+    <!-- 引入GIF导出库 -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ffmpeg.js@4.2.9003/dist/ffmpeg.min.js"></script>
+
+    <script>
+        // DOM元素获取
+        const appBody = document.getElementById('appBody');
+        const textInput = document.getElementById('textInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        const displayText = document.getElementById('displayText');
+        const particleContainer = document.getElementById('particleContainer');
+        const captureStage = document.getElementById('captureStage');
+        const loadingTip = document.getElementById('loadingTip');
+
+        // 爱情主题背景预设（粉系渐变，无诡异颜色）
+        const loveBgPresets = [
+            "linear-gradient(135deg, #ffccd5, #f7c8e0, #d4b5ff)",
+            "linear-gradient(135deg, #ffe5ec, #ffc2d1, #ff8fab)",
+            "linear-gradient(135deg, #fff0f5, #fde2e4, #fad2e1)",
+            "linear-gradient(135deg, #ffebf0, #ffd6e0, #ffc2f0)",
+            "linear-gradient(135deg, #ffe8f0, #ffc8dd, #ffb3e6)"
+        ];
+
+        // 对应背景的粒子颜色（同步匹配，保持爱情主题色调统一）
+        const bgMatchParticleColors = [
+            ["#ff69b4", "#d4b5ff"],
+            ["#ff8fab", "#ffc2d1"],
+            ["#fad2e1", "#fde2e4"],
+            ["#ffc2f0", "#ffd6e0"],
+            ["#ffb3e6", "#ffc8dd"]
+        ];
+
+        // 全局参数存储
+        let currentParams = {};
+
+        // 基于文字生成随机参数
+        function getRandomParamsByText(text) {
+            let seed = 1;
+            for (let i = 0; i < text.length; i++) {
+                seed = (seed * text.charCodeAt(i)) % 999999;
+            }
+            const random = (min, max) => {
+                seed = (seed * 9301 + 49297) % 233280;
+                return Math.floor(min + (seed / 233280) * (max - min));
+            };
+
+            const bgIndex = random(0, loveBgPresets.length - 1);
+            return {
+                rotateDuration: random(6, 10),
+                particleCount: random(15, 30),
+                jumpDuration: random(15, 25)/10,
+                rotateDuration: random(25, 40)/10,
+                bgIndex: bgIndex,
+                colorIndex: random(0, bgMatchParticleColors[bgIndex].length - 1)
+            };
+        }
+
+        // 清除粒子
+        function clearParticles() {
+            particleContainer.innerHTML = '';
+        }
+
+        // 生成粒子：颜色随背景同步变化
+        function createHeartParticles(params) {
+            clearParticles();
+            const { particleCount, jumpDuration, rotateDuration, bgIndex, colorIndex } = params;
+            const textRect = displayText.getBoundingClientRect();
+            // 粒子颜色匹配当前背景
+            const particleColor = bgMatchParticleColors[bgIndex][colorIndex];
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'heart-particle';
+                if (Math.random() < 0.4) particle.classList.add('tiny');
+                if (Math.random() < 0.5) particle.classList.add('reverse');
+
+                const randomX = Math.random() * textRect.width - textRect.width/2;
+                const randomY = Math.random() * textRect.height - textRect.height/2;
+                particle.style.left = `calc(50% + ${randomX}px)`;
+                particle.style.top = `calc(50% + ${randomY}px)`;
+
+                // 设置粒子颜色
+                particle.style.backgroundColor = particleColor;
+                particle.style.boxShadow = `0 0 8px ${particleColor}`;
+                const style = document.createElement('style');
+                style.textContent = `
+                    #particleContainer .heart-particle:nth-child(${i+1})::before,
+                    #particleContainer .heart-particle:nth-child(${i+1})::after {
+                        background-color: ${particleColor};
+                        box-shadow: 0 0 8px ${particleColor};
+                    }
+                `;
+                document.head.appendChild(style);
+
+                const delay = Math.random() * jumpDuration;
+                particle.style.animationDuration = `${jumpDuration}s, ${rotateDuration}s`;
+                particle.style.animationDelay = `${delay}s, ${delay}s`;
+
+                particleContainer.appendChild(particle);
+            }
+
+            let particleTimer = setInterval(() => {
+                if (particleContainer.children.length > particleCount + 10) {
+                    clearInterval(particleTimer);
+                    return;
+                }
+                const particle = document.createElement('div');
+                particle.className = 'heart-particle tiny';
+                if (Math.random() < 0.5) particle.classList.add('reverse');
+
+                const randomX = Math.random() * textRect.width - textRect.width/2;
+                const randomY = Math.random() * textRect.height - textRect.height/2;
+                particle.style.left = `calc(50% + ${randomX}px)`;
+                particle.style.top = `calc(50% + ${randomY}px)`;
+
+                particle.style.backgroundColor = particleColor;
+                particle.style.boxShadow = `0 0 8px ${particleColor}`;
+                particle.style.animationDuration = `${jumpDuration}s, ${rotateDuration}s`;
+                particle.style.animationDelay = `${Math.random() * jumpDuration}s`;
+
+                particleContainer.appendChild(particle);
+            }, 800);
+        }
+
+        // 生成特效：背景随机+粒子颜色同步
+        function generateTextEffect(text) {
+            if (!text.trim()) {
+                alert('请输入有效文字！');
+                return;
+            }
+            displayText.textContent = text;
+            currentParams = getRandomParamsByText(text);
+            // 随机切换爱情主题背景
+            appBody.style.background = loveBgPresets[currentParams.bgIndex];
+            // 文字颜色匹配背景
+            const textColor = bgMatchParticleColors[currentParams.bgIndex][0];
+            displayText.style.color = textColor;
+            displayText.style.textShadow = `0 0 10px rgba(${hexToRgb(textColor).join(',')}, 0.3), 0 0 20px rgba(${hexToRgb(textColor).join(',')}, 0.1)`;
+            // 设置文字旋转
+            displayText.style.animation = `text3DRotate ${currentParams.rotateDuration}s linear infinite`;
+            createHeartParticles(currentParams);
+        }
+
+        // 辅助函数：十六进制转RGB
+        function hexToRgb(hex) {
+            hex = hex.replace('#', '');
+            return [
+                parseInt(hex.substring(0, 2), 16),
+                parseInt(hex.substring(2, 4), 16),
+                parseInt(hex.substring(4, 6), 16)
+            ];
+        }
+
+        // 核心功能：导出1:1 GIF（文字旋转一圈）
+        async function exportToGif() {
+            const rotateDuration = currentParams.rotateDuration || 8;
+            const frameCount = 30; // 总帧数
+            const frameDelay = rotateDuration * 1000 / frameCount; // 每帧间隔
+            const canvasSize = 500; // GIF尺寸 500x500（1:1）
+
+            loadingTip.style.display = 'block';
+            exportBtn.disabled = true;
+            exportBtn.style.opacity = '0.6';
+
+            try {
+                // 初始化ffmpeg
+                const { createFFmpeg, fetchFile } = FFmpeg;
+                const ffmpeg = createFFmpeg({ log: false });
+                await ffmpeg.load();
+
+                // 调整舞台为1:1尺寸
+                const originalStyle = {
+                    width: captureStage.style.width,
+                    height: captureStage.style.height,
+                    position: captureStage.style.position,
+                    top: captureStage.style.top,
+                    left: captureStage.style.left
+                };
+                captureStage.style.width = `${canvasSize}px`;
+                captureStage.style.height = `${canvasSize}px`;
+                captureStage.style.position = 'fixed';
+                captureStage.style.top = `${(window.innerHeight - canvasSize)/2}px`;
+                captureStage.style.left = `${(window.innerWidth - canvasSize)/2}px`;
+
+                // 捕获每一帧
+                for (let i = 0; i < frameCount; i++) {
+                    // 等待帧间隔
+                    await new Promise(resolve => setTimeout(resolve, frameDelay));
+                    // 截图
+                    const canvas = await html2canvas(captureStage, {
+                        width: canvasSize,
+                        height: canvasSize,
+                        scale: 1,
+                        useCORS: true
+                    });
+                    const dataUrl = canvas.toDataURL('image/png');
+                    const blob = await (await fetch(dataUrl)).blob();
+                    const arrayBuffer = await blob.arrayBuffer();
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    // 写入ffmpeg
+                    ffmpeg.FS('writeFile', `frame${i}.png`, uint8Array);
+                }
+
+                // 恢复舞台样式
+                captureStage.style.width = originalStyle.width;
+                captureStage.style.height = originalStyle.height;
+                captureStage.style.position = originalStyle.position;
+                captureStage.style.top = originalStyle.top;
+                captureStage.style.left = originalStyle.left;
+
+                // 转换为GIF
+                await ffmpeg.run(
+                    '-framerate', '10',
+                    '-i', 'frame%d.png',
+                    '-vf', 'scale=500:500:force_original_aspect_ratio=1,pad=500:500:(ow-iw)/2:(oh-ih)/2',
+                    '-loop', '0',
+                    '-y',
+                    'output.gif'
+                );
+
+                // 下载GIF
+                const data = ffmpeg.FS('readFile', 'output.gif');
+                const url = URL.createObjectURL(new Blob([data.buffer], { type: 'image/gif' }));
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `鸡公煲制作_${Date.now()}.gif`;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                // 清理临时文件
+                for (let i = 0; i < frameCount; i++) {
+                    ffmpeg.FS('unlink', `frame${i}.png`);
+                }
+                ffmpeg.FS('unlink', 'output.gif');
+
+            } catch (error) {
+                alert('GIF导出失败，请重试！');
+                console.error(error);
+            } finally {
+                loadingTip.style.display = 'none';
+                exportBtn.disabled = false;
+                exportBtn.style.opacity = '1';
+            }
+        }
+
+        // 事件绑定
+        generateBtn.addEventListener('click', () => {
+            generateTextEffect(textInput.value.trim());
+        });
+
+        textInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                generateTextEffect(textInput.value.trim());
+            }
+        });
+
+        exportBtn.addEventListener('click', exportToGif);
+
+        // 初始化
+        generateTextEffect(displayText.textContent);
+    </script>
+</body>
+</html>
