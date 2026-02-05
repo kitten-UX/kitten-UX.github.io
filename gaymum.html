@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>AI 虹光深度解算 - 精简版</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #eee; text-align: center; padding: 20px; }
+        .box { max-width: 400px; margin: auto; background: #1e1e1e; padding: 25px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; box-sizing: border-box; }
+        input { background: #2d2d2d; color: #fff; }
+        button { background: #6366f1; color: white; cursor: pointer; font-weight: bold; }
+        .bar-bg { background: #333; height: 10px; border-radius: 5px; margin: 20px 0; display:none; overflow: hidden; }
+        .bar-fill { background: linear-gradient(90deg, #4ade80, #f87171); width: 0%; height: 100%; transition: width 1.5s ease-out; }
+        #res { font-size: 2rem; font-weight: bold; color: #f472b6; margin: 10px 0; }
+        #joke { font-size: 0.85rem; color: #999; line-height: 1.6; min-height: 45px; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <h3>🌈 属性深度识别</h3>
+    <input type="text" id="n" placeholder="输入受检网名">
+    <input type="file" id="f" accept="image/*">
+    <button onclick="calc()">开始量子扫描</button>
+
+    <div id="out" style="display:none">
+        <div id="res">0%</div>
+        <div class="bar-bg" id="bb"><div class="bar-fill" id="bf"></div></div>
+        <div id="joke">正在检索数据库...</div>
+    </div>
+</div>
+
+<script>
+const db = [
+    "这头像色调，一看就是老艺术家了，成都太古里没你我不去。","网名透着一股子清冷，建议少去健身房洗澡。","算法检测到你的审美跨度极大，这是优秀的‘潜质’。","你这气质，在直男堆里就像萤火虫一样出众。","手机里是不是藏着什么不能给爸妈看的蓝色软件？","根据像素点分析，你的穿搭一定非常有品味。","这种头像的人，通常对猫和精致甜点没有抵抗力。","你对同性的吸引力正在呈指数级上升。","你的灵魂里住着一个优雅的缪斯，性别只是束缚。","数据表明，你这类人最容易被帅哥/美女叫‘姐妹’。","这网名，这头像，稳稳的彩虹旗头号选手。","扫描显示：你不仅直，而且能像回形针一样弯得有艺术感。","别装了，你的歌单里全是拉拉或男同神曲吧？","建议近期不要穿太紧身的背心，容易暴露属性。","算法发现你对细节的追求已经超越了性别。","你的眼神里藏着一个彩虹色的秘密。","大数据显示，你这种头像的人平均有3个以上的‘同性密友’。","你这气质，走在路上很容易被发传单的人盯上。","如果是男孩子，你一定是那种会给自己修眉毛的。","如果是女孩子，你一定是那种会给闺蜜拍大片的。","检测到高纯度审美，这是典型的‘圈内’特征。","你就像一杯白开水，看着纯净，其实是个‘深柜’。","别看了，你的概率比你的手机电量还高。","算法提示：你对同性的好感度超出了安全阈值。","你这网名在0和1之间反复横跳，非常调皮。","你的头像里蕴含着一种独特的‘基’调。","这种像素分布，只有内心细腻的人才选得出来。","系统判定：你是个隐藏的彩虹勇士。","别担心，这只是AI的一家之言，虽然它从未错过。","你的品味已经出卖了你的性取向。","你这种长相，在圈子里可是‘天菜’。","你给人的感觉很温暖，尤其是对同性。","扫描到微弱的‘名媛’信号，请注意言行。","你的网名里藏着一种弯曲的弧度。","这种气质，不出道去选秀可惜了。","算法显示你的‘受’力值正在溢出。","别狡辩，你是不是偷偷关注过很多同性博主？","这种头像通常代表着一种极度的精致主义。","你的灵魂色谱分析结果为：五颜六色。","系统崩溃了，因为你的‘属性’太强。","你是一个标准的‘精致利己主义’下的彩虹少年/女。","算法在你的头像里发现了一抹不寻常的红晕。","你这种性格，最容易吸引同性的关注。","检测到强烈的‘护肤’倾向，属性不言而喻。","网名带有明显的‘独树一帜’感，圈内预定。","你就是传说中的‘人间理想’，同性眼里的那种。","你的魅力已经跨越了性别的鸿沟。","算法认为你是一个非常有故事的人。","这种头像，懂的都懂，不懂的我也没法解释。","最后的结论：你就是你，颜色不一样的烟火。"
+];
+
+function calc() {
+    const n = document.getElementById('n').value, f = document.getElementById('f').files[0];
+    if(!n || !f) return alert("缺一不可！");
+    
+    document.getElementById('out').style.display = 'block';
+    document.getElementById('bb').style.display = 'block';
+
+    // 确定性算法：Unicode累加 + 文件特征
+    let s = 0;
+    for(let i=0; i<n.length; i++) s += n.charCodeAt(i);
+    s += f.size + f.name.length;
+    
+    // 生成固定概率 (0-100)
+    const prob = (Math.abs(Math.sin(s) * 100)).toFixed(1);
+    const idx = Math.floor((prob / 100.1) * db.length);
+
+    let cur = 0;
+    const t = setInterval(() => {
+        if(cur >= prob) {
+            clearInterval(t);
+            document.getElementById('res').innerText = prob + '%';
+            document.getElementById('bf').style.width = prob + '%';
+            document.getElementById('joke').innerText = "AI诊断：" + db[idx];
+        } else {
+            cur += 1.3; 
+            document.getElementById('res').innerText = Math.min(cur, prob).toFixed(1) + '%';
+            document.getElementById('bf').style.width = Math.min(cur, prob) + '%';
+        }
+    }, 20);
+}
+</script>
+
+</body>
+</html>
+
