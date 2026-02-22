@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AR神笔马良 - 深度感应版</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <style>
+        :root { --accent: #00ffcc; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #video-container { position: fixed; width: 100vw; height: 100vh; }
+        .mirrored { transform: scaleX(-1); }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        #output_canvas { position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; }
+
+        /* 状态指示器 */
+        .status-tag {
+            position: fixed; top: 20px; right: 20px; padding: 8px 15px;
+            background: rgba(0,0,0,0.6); color: white; border-radius: 20px;
+            font-size: 12px; z-index: 10; border: 1px solid var(--accent);
+        }
+
+        /* 底部控制面板 */
+        .panel {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            z-index: 10; width: 90%; max-width: 500px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .mode-switch {
+            display: flex; background: rgba(0,0,0,0.8); border-radius: 12px; overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .mode-btn {
+            flex: 1; padding: 15px; color: white; border: none; background: none;
+            cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        .mode-btn.active { background: var(--accent); color: #000; }
+        
+        .tool-bar { display: flex; justify-content: space-between; gap: 10px; }
+        .circle-btn {
+            width: 50px; height: 50px; border-radius: 50%; border: 2px solid white;
+            background: rgba(0,0,0,0.5); color: white; display: flex; 
+            align-items: center; justify-content: center; font-size: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="status" class="status-tag">等待手势...</div>
+
+    <div id="video-container" class="mirrored">
+        <video id="input_video" playsinline></video>
+    </div>
+    <canvas id="output_canvas"></canvas>
+
+    <div class="panel">
+        <div class="mode-switch">
+            <button id="btn-move" class="mode-btn active" onclick="setMode('move')">🖐️ 移动模式</button>
+            <button id="btn-draw" class="mode-btn" onclick="setMode('draw')">✍️ 绘画模式</button>
+        </div>
+
+        <div class="tool-bar">
+            <button class="circle-btn" onclick="toggleMirror()">🪞</button>
+            <button class="circle-btn" onclick="switchCamera()">🔄</button>
+            <button class="circle-btn" onclick="initAR()" id="ar-indicator">📡</button>
+            <button class="circle-btn" onclick="clearCanvas()" style="border-color: #ff4757;">🗑️</button>
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const videoContainer = document.getElementById('video-container');
+        let isMirrored = true;
+        let isARActive = false;
+        let paintMode = 'move'; // 'move' or 'draw'
+        let currentColor = 0x00ffcc;
+        
+        // --- Three.js 场景设置 ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('output_canvas'), alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.position.set(0, 0, 0);
+
+        // --- 核心逻辑：动态粗细画笔 ---
+        let currentStroke = null;
+        let strokePoints = [];
+
+        function createNewStroke(startPoint, radius) {
+            // 使用 Sphere 模拟画笔尖端，后续用多个 Sphere 连成线实现丝滑粗细变化
+            const geometry = new THREE.SphereGeometry(radius, 16, 16);
+            const material = new THREE.MeshBasicMaterial({ color: currentColor });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(startPoint);
+            scene.add(mesh);
+            return mesh;
+        }
+
+        // --- 手势识别 ---
+        const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
+
+        hands.onResults((results) => {
+            const statusLabel = document.getElementById('status');
+            
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const indexTip = results.multiHandLandmarks[0][8]; // 食指指尖
+                
+                // 1. 坐标镜像与映射
+                let x = (indexTip.x - 0.5) * 10;
+                let y = -(indexTip.y - 0.5) * 10;
+                if (isMirrored) x = -x;
+
+                // 2. 核心：根据深度 Z 切换粗细
+                // indexTip.z 越小（负数越深）表示离镜头越近。
+                // 我们将其映射为画笔半径。
+                const rawZ = indexTip.z; 
+                const zPos = -rawZ * 20 - 5; 
+                const brushRadius = Math.max(0.02, Math.abs(rawZ) * 1.2); 
+
+                statusLabel.innerText = `深度: ${rawZ.toFixed(2)} | 粗细: ${brushRadius.toFixed(2)}`;
+
+                // 3. 绘画触发逻辑
+                if (paintMode === 'draw') {
+                    // 将屏幕点转为世界空间坐标（考虑相机旋转）
+                    const worldPos = new THREE.Vector3(x, y, zPos).applyQuaternion(camera.quaternion);
+                    
+                    // 每一帧画一个小球，形成连续的立体线条
+                    createNewStroke(worldPos, brushRadius);
+                }
+            } else {
+                statusLabel.innerText = "未检测到手指";
+            }
+        });
+
+        // --- 交互控制 ---
+        function setMode(mode) {
+            paintMode = mode;
+            document.getElementById('btn-move').classList.toggle('active', mode === 'move');
+            document.getElementById('btn-draw').classList.toggle('active', mode === 'draw');
+        }
+
+        function toggleMirror() {
+            isMirrored = !isMirrored;
+            videoContainer.classList.toggle('mirrored', isMirrored);
+        }
+
+        function initAR() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(s => { if(s==='granted') startAR(); });
+            } else { startAR(); }
+        }
+
+        function startAR() {
+            isARActive = !isARActive;
+            document.getElementById('ar-indicator').style.borderColor = isARActive ? 'var(--accent)' : 'white';
+            const handler = (e) => {
+                if(!isARActive) return;
+                const alpha = THREE.MathUtils.degToRad(e.alpha);
+                const beta = THREE.MathUtils.degToRad(e.beta);
+                const gamma = THREE.MathUtils.degToRad(e.gamma);
+                camera.quaternion.setFromEuler(new THREE.Euler(beta, alpha, -gamma, 'YXZ'));
+            };
+            window.addEventListener('deviceorientation', handler);
+        }
+
+        async function switchCamera() {
+            facingMode = (facingMode === "user") ? "environment" : "user";
+            isMirrored = (facingMode === "user");
+            videoContainer.classList.toggle('mirrored', isMirrored);
+            if (cameraControl) { await cameraControl.stop(); startCamera(); }
+        }
+
+        let facingMode = "user";
+        let cameraControl;
+        function startCamera() {
+            cameraControl = new Camera(videoElement, {
+                onFrame: async () => { await hands.send({ image: videoElement }); },
+                width: 1280, height: 720, facingMode: facingMode
+            });
+            cameraControl.start();
+        }
+
+        window.clearCanvas = () => { while(scene.children.length > 0) scene.remove(scene.children[0]); };
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        startCamera();
+        animate();
+    </script>
+</body>
+</html>
