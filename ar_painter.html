@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AR神笔马良 - 深度感应版</title>
+    <title>AR/VR 神笔马良 Pro</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -12,160 +12,156 @@
     <style>
         :root { --accent: #00ffcc; }
         body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #video-container { position: fixed; width: 100vw; height: 100vh; }
+        
+        /* 视频图层 */
+        #video-container { position: fixed; width: 100vw; height: 100vh; z-index: 1; }
         .mirrored { transform: scaleX(-1); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        #output_canvas { position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; }
 
-        /* 状态指示器 */
-        .status-tag {
-            position: fixed; top: 20px; right: 20px; padding: 8px 15px;
-            background: rgba(0,0,0,0.6); color: white; border-radius: 20px;
-            font-size: 12px; z-index: 10; border: 1px solid var(--accent);
-        }
+        /* 画布层 */
+        canvas { position: absolute; top: 0; left: 0; z-index: 5; pointer-events: none; }
 
-        /* 底部控制面板 */
-        .panel {
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-            z-index: 10; width: 90%; max-width: 500px;
-            display: flex; flex-direction: column; gap: 15px;
+        /* UI 面板 */
+        .ui-overlay {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            z-index: 100; width: 95%; max-width: 600px; display: flex; flex-direction: column; gap: 10px;
         }
-        .mode-switch {
-            display: flex; background: rgba(0,0,0,0.8); border-radius: 12px; overflow: hidden;
-            border: 1px solid rgba(255,255,255,0.2);
+        .vr-mode-ui { display: none; } /* VR模式下隐藏UI */
+
+        .controls-row { display: flex; gap: 8px; justify-content: center; }
+        .btn {
+            background: rgba(0,0,0,0.7); color: white; border: 1px solid rgba(255,255,255,0.3);
+            padding: 12px; border-radius: 12px; flex: 1; font-size: 14px;
         }
-        .mode-btn {
-            flex: 1; padding: 15px; color: white; border: none; background: none;
-            cursor: pointer; font-weight: bold; transition: 0.3s;
-        }
-        .mode-btn.active { background: var(--accent); color: #000; }
+        .btn.active { background: var(--accent); color: #000; font-weight: bold; }
         
-        .tool-bar { display: flex; justify-content: space-between; gap: 10px; }
-        .circle-btn {
-            width: 50px; height: 50px; border-radius: 50%; border: 2px solid white;
-            background: rgba(0,0,0,0.5); color: white; display: flex; 
-            align-items: center; justify-content: center; font-size: 20px;
+        .color-pills { display: flex; gap: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 50px; justify-content: center; }
+        .pill { width: 30px; height: 30px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
+        
+        /* VR 分屏遮罩 */
+        #vr-cursor { 
+            display: none; position: fixed; top: 50%; left: 50%; 
+            width: 10px; height: 10px; background: red; border-radius: 50%; transform: translate(-50%, -50%); z-index: 200;
         }
     </style>
 </head>
 <body>
 
-    <div id="status" class="status-tag">等待手势...</div>
-
     <div id="video-container" class="mirrored">
         <video id="input_video" playsinline></video>
     </div>
     <canvas id="output_canvas"></canvas>
+    <div id="vr-cursor"></div>
 
-    <div class="panel">
-        <div class="mode-switch">
-            <button id="btn-move" class="mode-btn active" onclick="setMode('move')">🖐️ 移动模式</button>
-            <button id="btn-draw" class="mode-btn" onclick="setMode('draw')">✍️ 绘画模式</button>
+    <div class="ui-overlay" id="main-ui">
+        <div class="color-pills">
+            <div class="pill" style="background:#ff3e3e" onclick="setColor('#ff3e3e')"></div>
+            <div class="pill" style="background:#3eff8b" onclick="setColor('#3eff8b')"></div>
+            <div class="pill" style="background:#3eabff" onclick="setColor('#3eabff')"></div>
+            <div class="pill" style="background:#ffff3e" onclick="setColor('#ffff3e')"></div>
+            <div class="pill" style="background:#ffffff" onclick="setColor('#ffffff')"></div>
         </div>
-
-        <div class="tool-bar">
-            <button class="circle-btn" onclick="toggleMirror()">🪞</button>
-            <button class="circle-btn" onclick="switchCamera()">🔄</button>
-            <button class="circle-btn" onclick="initAR()" id="ar-indicator">📡</button>
-            <button class="circle-btn" onclick="clearCanvas()" style="border-color: #ff4757;">🗑️</button>
+        <div class="controls-row">
+            <button class="btn" id="draw-toggle" onclick="toggleDraw()">🖐️ 移动中</button>
+            <button class="btn" onclick="toggleVR()">🥽 VR模式</button>
+            <button class="btn" onclick="switchCamera()">🔄 镜头</button>
+            <button class="btn" onclick="clearAll()" style="color:#ff4757">🗑️ 清空</button>
         </div>
     </div>
 
     <script>
+        // --- 初始化变量 ---
         const videoElement = document.getElementById('input_video');
         const videoContainer = document.getElementById('video-container');
-        let isMirrored = true;
-        let isARActive = false;
-        let paintMode = 'move'; // 'move' or 'draw'
-        let currentColor = 0x00ffcc;
-        
-        // --- Three.js 场景设置 ---
+        let isMirrored = true, isDrawing = false, isVR = false, isAR = false;
+        let currentColor = 0x3eff8b, lastPoint = null, facingMode = "user";
+
+        // --- Three.js 核心 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('output_canvas'), alpha: true, antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        camera.position.set(0, 0, 0);
+        renderer.autoClear = false; // VR 双眼渲染需要
 
-        // --- 核心逻辑：动态粗细画笔 ---
-        let currentStroke = null;
-        let strokePoints = [];
-
-        function createNewStroke(startPoint, radius) {
-            // 使用 Sphere 模拟画笔尖端，后续用多个 Sphere 连成线实现丝滑粗细变化
-            const geometry = new THREE.SphereGeometry(radius, 16, 16);
+        // --- 连贯画笔算法 ---
+        function drawSmoothLine(currentPos, radius) {
+            const geometry = new THREE.SphereGeometry(radius, 12, 12);
             const material = new THREE.MeshBasicMaterial({ color: currentColor });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.copy(startPoint);
-            scene.add(mesh);
-            return mesh;
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.copy(currentPos);
+            scene.add(sphere);
+
+            // 如果有上一个点，在两点间填充，防止断裂
+            if (lastPoint) {
+                const dist = lastPoint.distanceTo(currentPos);
+                const steps = Math.ceil(dist / (radius * 0.5)); // 根据粗细决定填充密度
+                for (let i = 1; i < steps; i++) {
+                    const lerpSphere = sphere.clone();
+                    lerpSphere.position.lerpVectors(lastPoint, currentPos, i / steps);
+                    scene.add(lerpSphere);
+                }
+            }
+            lastPoint = currentPos.clone();
         }
 
-        // --- 手势识别 ---
+        // --- MediaPipe 手势识别 ---
         const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.8, minTrackingConfidence: 0.8 });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 
         hands.onResults((results) => {
-            const statusLabel = document.getElementById('status');
-            
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const indexTip = results.multiHandLandmarks[0][8]; // 食指指尖
+                const tip = results.multiHandLandmarks[0][8];
                 
-                // 1. 坐标镜像与映射
-                let x = (indexTip.x - 0.5) * 10;
-                let y = -(indexTip.y - 0.5) * 10;
+                // 坐标计算
+                let x = (tip.x - 0.5) * 12;
+                let y = -(tip.y - 0.5) * 10;
                 if (isMirrored) x = -x;
+                
+                // 粗细随距离变化：tip.z 越负（离镜头越近），线条越粗
+                const z = -tip.z * 20 - 5;
+                const radius = Math.max(0.02, Math.abs(tip.z) * 1.5);
 
-                // 2. 核心：根据深度 Z 切换粗细
-                // indexTip.z 越小（负数越深）表示离镜头越近。
-                // 我们将其映射为画笔半径。
-                const rawZ = indexTip.z; 
-                const zPos = -rawZ * 20 - 5; 
-                const brushRadius = Math.max(0.02, Math.abs(rawZ) * 1.2); 
-
-                statusLabel.innerText = `深度: ${rawZ.toFixed(2)} | 粗细: ${brushRadius.toFixed(2)}`;
-
-                // 3. 绘画触发逻辑
-                if (paintMode === 'draw') {
-                    // 将屏幕点转为世界空间坐标（考虑相机旋转）
-                    const worldPos = new THREE.Vector3(x, y, zPos).applyQuaternion(camera.quaternion);
-                    
-                    // 每一帧画一个小球，形成连续的立体线条
-                    createNewStroke(worldPos, brushRadius);
+                if (isDrawing) {
+                    const pos = new THREE.Vector3(x, y, z).applyQuaternion(camera.quaternion);
+                    drawSmoothLine(pos, radius);
+                } else {
+                    lastPoint = null;
                 }
-            } else {
-                statusLabel.innerText = "未检测到手指";
             }
         });
 
-        // --- 交互控制 ---
-        function setMode(mode) {
-            paintMode = mode;
-            document.getElementById('btn-move').classList.toggle('active', mode === 'move');
-            document.getElementById('btn-draw').classList.toggle('active', mode === 'draw');
+        // --- 交互功能 ---
+        function toggleDraw() {
+            isDrawing = !isDrawing;
+            const btn = document.getElementById('draw-toggle');
+            btn.innerText = isDrawing ? "✍️ 绘画中" : "🖐️ 移动中";
+            btn.classList.toggle('active', isDrawing);
         }
 
-        function toggleMirror() {
-            isMirrored = !isMirrored;
-            videoContainer.classList.toggle('mirrored', isMirrored);
+        function setColor(hex) { currentColor = new THREE.Color(hex).getHex(); }
+        
+        function clearAll() { while(scene.children.length > 0) scene.remove(scene.children[0]); }
+
+        function toggleVR() {
+            isVR = !isVR;
+            document.getElementById('main-ui').style.display = isVR ? 'none' : 'flex';
+            if (isVR) {
+                // VR模式自动开启传感器
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission().then(s => { if(s==='granted') window.addEventListener('deviceorientation', setCameraRotation); });
+                } else { window.addEventListener('deviceorientation', setCameraRotation); }
+                alert("请将手机放入VR盒子，再次点击屏幕退出");
+            } else {
+                window.removeEventListener('deviceorientation', setCameraRotation);
+                camera.quaternion.set(0,0,0,1);
+            }
         }
 
-        function initAR() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission().then(s => { if(s==='granted') startAR(); });
-            } else { startAR(); }
-        }
-
-        function startAR() {
-            isARActive = !isARActive;
-            document.getElementById('ar-indicator').style.borderColor = isARActive ? 'var(--accent)' : 'white';
-            const handler = (e) => {
-                if(!isARActive) return;
-                const alpha = THREE.MathUtils.degToRad(e.alpha);
-                const beta = THREE.MathUtils.degToRad(e.beta);
-                const gamma = THREE.MathUtils.degToRad(e.gamma);
-                camera.quaternion.setFromEuler(new THREE.Euler(beta, alpha, -gamma, 'YXZ'));
-            };
-            window.addEventListener('deviceorientation', handler);
+        function setCameraRotation(e) {
+            const alpha = THREE.MathUtils.degToRad(e.alpha);
+            const beta = THREE.MathUtils.degToRad(e.beta);
+            const gamma = THREE.MathUtils.degToRad(e.gamma);
+            camera.quaternion.setFromEuler(new THREE.Euler(beta, alpha, -gamma, 'YXZ'));
         }
 
         async function switchCamera() {
@@ -175,7 +171,35 @@
             if (cameraControl) { await cameraControl.stop(); startCamera(); }
         }
 
-        let facingMode = "user";
+        // --- 渲染循环 (含 VR 双眼渲染逻辑) ---
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isVR) {
+                renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+                renderer.setScissorTest(false);
+                renderer.clear();
+                renderer.render(scene, camera);
+            } else {
+                // VR 双眼模式：渲染两次，分别偏置相机
+                const width = window.innerWidth / 2;
+                const height = window.innerHeight;
+
+                renderer.setScissorTest(true);
+
+                // 左眼
+                renderer.setViewport(0, 0, width, height);
+                renderer.setScissor(0, 0, width, height);
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.render(scene, camera);
+
+                // 右眼
+                renderer.setViewport(width, 0, width, height);
+                renderer.setScissor(width, 0, width, height);
+                renderer.render(scene, camera);
+            }
+        }
+
         let cameraControl;
         function startCamera() {
             cameraControl = new Camera(videoElement, {
@@ -185,12 +209,8 @@
             cameraControl.start();
         }
 
-        window.clearCanvas = () => { while(scene.children.length > 0) scene.remove(scene.children[0]); };
-
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
-        }
+        // 退出VR的备用操作：点击屏幕任何地方
+        window.addEventListener('click', () => { if(isVR) toggleVR(); });
 
         startCamera();
         animate();
